@@ -29,7 +29,7 @@ snmp-scout --rules path/to/rules/file
 
 Available options:
 
-- `-r, --rules <path-to-rules-file>`: Specify a path to the discovery rules file
+- `-r, --rules <path-to-rules-file>`: Specify a path to the discovery rules file - default: ./snmp-scout-rules.js -- see format below
 - `-h, --help`: Show help message and exit
 
 ### As a module
@@ -40,7 +40,7 @@ You can also use SNMP-Scout as a module in your Node.js project:
 const { discoverHosts } = require('snmp-scout');
 
 const rules = [
-  // Define your discovery rules here
+  // Define your discovery rules here - see format below
 ];
 
 discoverHosts(rules).then(discoveredHosts => {
@@ -48,9 +48,32 @@ discoverHosts(rules).then(discoveredHosts => {
 });
 ```
 
+##### Host objects in discoveredHosts
+
+```javascript
+var discoveredHosts = [{
+  "ip": "192.168.1.10",
+  "community": "public",
+  "varbinds": [
+    {
+      "oid": "1.3.6.1.2.1.1.1.0",
+      "type": 4,
+      "value": "Linux server 5.10.0-8-amd64 #1 SMP Debian 5.10.46-4 (2021-08-03) x86_64"
+    }
+  ],
+  "rule": { // rules[i] - a direct reference of the rule in the rules Array
+    "name": "Linux Host",
+    "community": ["public"],
+    "oids": ["1.3.6.1.2.1.1.1.0"],
+    "matchFunction": (ip, varbinds) => { ... }
+  }
+}]
+```
+
 ## Discovery Rules
 
-SNMP-Scout uses a separate file to define custom discovery rules. A sample `snmp-scout-rules.js` file should be provided in the working directory:
+When used as CLI, the rules file (default: ./snmp-scout-rules.js) should be Javascript and export
+the rules in an Array:
 
 ```javascript
 module.exports = [
@@ -60,10 +83,13 @@ module.exports = [
     oids: ['1.3.6.1.2.1.1.1.0', '1.3.6.1.2.1.1.5.0'],
     matchFunction: (ip, varbinds) => {
       // Your matching logic here
+      // Return true|false
     },
   },
 ];
 ```
+
+When imported as a module, the rules are passed to the discoverHosts(rules) function.
 
 ## License
 
