@@ -1,0 +1,35 @@
+{
+  "name": "snmp-scout",
+  "version": "0.0.1",
+  "description": "SNMP-based host discovery tool",
+  "main": "dist/snmp-scout.js",
+  "bin": {
+    "snmp-scout": "./cli.js"
+  },
+  "scripts": {
+    "start": "node cli.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jwalkerlusd/snmp-scout.git"
+  },
+  "keywords": [
+    "snmp",
+    "host-discovery",
+    "networking"
+  ],
+  "author": "Jeremy Walker <jwalker@lusd.net>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jwalkerlusd/snmp-scout/issues"
+  },
+  "homepage": "https://github.com/jwalkerlusd/snmp-scout#readme",
+  "dependencies": {
+    "net-snmp": "^3.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^4.5.5"
+  }
+}
