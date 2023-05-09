@@ -4,10 +4,11 @@ SNMP-Scout is a Node.js-based host discovery tool that uses SNMP to find hosts o
 
 ## Features
 
-- Discover hosts on a specified subnet using SNMP
+- Discover hosts using SNMP
+- Customizable discovery rules
 - Support for multiple community strings
-- Customizable discovery rules using a separate file
-- CLI for easy execution
+- Support for matching multiple OIDs
+- CLI and Module
 
 ## Installation
 
@@ -91,6 +92,11 @@ module.exports = [
 
 When imported as a module, the rules are passed to the discoverHosts(rules) function.
 
+
+## Contributing
+
+Feel free to open issues or submit pull requests on the [GitHub repository](https://github.com/jwalkerlusd/snmp-scout).
+
 ## License
 
-This project is licensed under the ISC License.
+This project is licensed under the [ISC License](https://opensource.org/licenses/ISC)
