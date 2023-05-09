@@ -11,24 +11,67 @@ interface Varbind {
 }
 
 /**
- * Represents a host discovered during the SNMP scan.
+ * Represents a discovered host with its IP, and the community string, varbinds, and associated rule that was used to discover it.
  */
 interface Host {
+    /**
+     * The IP address of the host.
+     */
     ip: string;
+  
+    /**
+     * The SNMP community string used to discover the host.
+     */
     community: string;
+  
+    /**
+     * The varbinds returned from the SNMP request to discover the host.
+     */
     varbinds: Varbind[];
+  
+    /**
+     * An array of references to the rules that the host was discovered with.
+     */
     rule: Rule;
-}
+  }
+  
 
 /**
  * Represents a rule used to discover hosts in a subnet.
  */
 interface Rule {
+    /**
+     * A user-friendly name for the rule.
+     */
+    name: string;
+
+    /**
+     * The subnet to scan for hosts, in CIDR notation (e.g., '192.168.1.0/24').
+     */
     subnet: string;
+
+    /**
+     * Array of SNMP community strings to try for each host.
+     */
     communities: string[];
+
+    /**
+     * Array of OIDs to fetch using SNMP.
+     */
     oids: string[];
-    options: object;
-    matchFunction: (ip: string, varbinds: Varbind[]) => boolean;
+
+    /**
+     * Options for the net-snmp session.
+     */
+    options?: object;
+
+    /**
+     * A function that determines if a host matches the rule based on the IP and varbinds.
+     * @param ip - The IP address of the host.
+     * @param varbinds - The varbinds returned from the SNMP request.
+     * @returns - A boolean indicating if the host matches the rule.
+     */
+    matchFunction(ip: string, varbinds: Varbind[]): boolean;
 }
 
 /**
@@ -71,7 +114,7 @@ async function getSNMPVarbinds(
     oids: string[],
     community: string,
     options: object
-  ): Promise<Varbind[]> {
+): Promise<Varbind[]> {
     const session = netSnmp.createSession(ip, community, options);
     const varbinds = await new Promise<Varbind[]>((resolve, reject) => {
         session.get(oids, (error, varbinds) => {
@@ -96,45 +139,38 @@ async function getSNMPVarbinds(
  * @returns An array of discovered hosts.
  */
 async function processRule(rule: Rule): Promise<Host[]> {
-    const [subnetIp, prefixLength] = rule.subnet.split('/');
-    const subnetInt = ipToInt(subnetIp);
-    const prefixInt = parseInt(prefixLength, 10);
+    const [subnet, mask] = rule.subnet.split('/');
+    const subnetInt = ipToInt(subnet);
+    const maskInt = ~(2 ** (32 - parseInt(mask)) - 1);
+    const firstHostInt = (subnetInt & maskInt) + 1;
+    const lastHostInt = (subnetInt | ~maskInt) - 1;
 
-    const numHosts = 2 ** (32 - prefixInt) - 2; // Subtract 2 for network and broadcast addresses
-    const discoveredHosts: Host[] = [];
+    const fetchVarbindsPromises: Promise<Host | null>[] = [];
 
-    for (const community of rule.communities) {
-        const options = {
-            ...rule.options,
-            community,
-        };
+    for (let currentHostInt = firstHostInt; currentHostInt <= lastHostInt; currentHostInt++) {
+        const currentHostIp = intToIp(currentHostInt);
 
-        // Create an array of promises to fetch varbinds for all IPs concurrently
-        const fetchVarbindsPromises = Array.from({ length: numHosts }, (_, i) => {
-            const ip = intToIp(subnetInt + i + 1); // Add 1 to skip the network address
-            return (async () => {
-                try {
-                    const varbinds = await getSNMPVarbinds(ip, rule.oids, community, options);
-                    if (rule.matchFunction(ip, varbinds)) {
+        for (const community of rule.communities) {
+            fetchVarbindsPromises.push(
+                getSNMPVarbinds(currentHostIp, rule.oids, community, rule.options).then((varbinds) => {
+                    if (rule.matchFunction(currentHostIp, varbinds)) {
                         return {
-                            ip,
+                            ip: currentHostIp,
                             community,
                             varbinds,
+                            rule,
                         };
+                    } else {
+                        return null;
                     }
-                } catch (err) {
-                    // Ignore errors related to individual hosts
-                }
-                return null;
-            })();
-        });
-
-        // Wait for all promises to complete and filter out any null values
-        const validHosts: Host[] = (await Promise.all(fetchVarbindsPromises)).filter((host): host is Host => host !== null);
-        discoveredHosts.push(...validHosts);
+                })
+            );
+        }
     }
 
-    return discoveredHosts;
+    const validDiscoveredHosts: Host[] = (await Promise.all(fetchVarbindsPromises)).filter((host): host is Host => host !== null);
+
+    return validDiscoveredHosts;
 }
 
 /**
@@ -149,30 +185,7 @@ async function discoverHosts(rules: Rule[] = []): Promise<Host[]> {
     for (const rule of rules) {
         try {
             const hosts = await processRule(rule);
-            for (const host of hosts) {
-                // Check if the host IP already exists in the allDiscoveredHosts array
-                const existingHostIndex = allDiscoveredHosts.findIndex(
-                    (existingHost) => existingHost.ip === host.ip
-                );
-
-                if (existingHostIndex === -1) {
-                    // If the host IP does not exist, add the host object with IP, community, varbinds, and rule
-                    allDiscoveredHosts.push({
-                        ip: host.ip,
-                        community: host.community,
-                        varbinds: host.varbinds,
-                        rule,
-                    });
-                } else {
-                    // If the host IP exists, update the existing host object with the new information
-                    allDiscoveredHosts[existingHostIndex] = {
-                        ...allDiscoveredHosts[existingHostIndex],
-                        community: host.community,
-                        varbinds: host.varbinds,
-                        rule,
-                    };
-                }
-            }
+            allDiscoveredHosts.push(...hosts);
         } catch (err) {
             console.error("Error processing rule:", err);
         }
