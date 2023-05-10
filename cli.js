@@ -6,6 +6,7 @@ const { discoverHosts } = require('./dist/snmp-scout');
 function parseArgs() {
     let args = process.argv.slice(2);
     let rulesPath = path.join(process.cwd(), 'snmp-scout-rules.js');
+    let outputJson = false;
     let help = false;
 
     for (let i = 0; i < args.length; i++) {
@@ -13,12 +14,14 @@ function parseArgs() {
             if (i + 1 > args.length || (/^-/.test(args[i + 1])))
                 throw new Error("--rules|-r specified without a path");
             rulesPath = args[++i];
+        } else if (args[i] === "--json" || args[i] === "-j") {
+            outputJson = true;
         } else if (args[i] === "--help" || args[i] === "-h") {
             help = true;
         }
     }
 
-    return { rulesPath, help };
+    return { rulesPath, outputJson, help };
 }
 
 function printUsage() {
@@ -28,6 +31,7 @@ function printUsage() {
   OPTIONS:
     -r, --rules PATH    The path to a CommonJS module that exports discovery rules
                           (default: "./snmp-scout-rules.js")
+    -j, --json          Output discovered hosts in JSON format
     -h, --help          Show this help message and exit
   `);
 }
@@ -66,9 +70,14 @@ async function main() {
 
     const discoveredHosts = await discoverHosts(rules);
 
-    for (const host of discoveredHosts) {
-        console.log(...host);
+    if (options.outputJson) {
+        console.log(JSON.stringify(discoveredHosts));
+    } else {
+        for (const host of discoveredHosts) {
+            console.log(...host);
+        }
     }
+
 }
 
 main();
