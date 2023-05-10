@@ -164,6 +164,9 @@ async function processRule(rule: Rule): Promise<Host[]> {
                         return null;
                     }
                 })
+                .catch(() => {
+                    return null;
+                })
             );
         }
     }
