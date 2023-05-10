@@ -73,9 +73,8 @@ async function main() {
     if (options.outputJson) {
         console.log(JSON.stringify(discoveredHosts));
     } else {
-        for (const host of discoveredHosts) {
-            console.log(...host);
-        }
+        let discoveredHostsTable = discoveredHosts.map((host) => ({ "Rule Name": host.rule.name, IP: host.ip, Community: host.community }));
+        console.table(discoveredHostsTable);
     }
 
 }
