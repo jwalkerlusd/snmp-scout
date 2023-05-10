@@ -103,6 +103,9 @@ async function processRule(rule) {
                 else {
                     return null;
                 }
+            })
+                .catch(() => {
+                return null;
             }));
         }
     }
