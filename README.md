@@ -18,6 +18,12 @@ Install SNMP-Scout globally using npm:
 npm install -g snmp-scout
 ```
 
+Or install as a Node module using npm:
+
+```sh
+npm install --save snmp-scout
+```
+
 ## Usage
 
 ### CLI
