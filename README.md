@@ -80,13 +80,14 @@ var discoveredHosts = [{
 
 ## Discovery Rules
 
-When used as CLI, the rules file (default: ./snmp-scout-rules.js) should be Javascript and export
-the rules in an Array:
+When used as CLI, the rules file (default: ./snmp-scout-rules.js) should be a CommonJS module and export
+the rules in an Array like so:
 
 ```javascript
 module.exports = [
   {
     name: 'Rule Name',
+    subnet: "192.168.0.0/24"
     community: ['public', 'private'],
     oids: ['1.3.6.1.2.1.1.1.0', '1.3.6.1.2.1.1.5.0'],
     matchFunction: (ip, varbinds) => {
@@ -94,6 +95,7 @@ module.exports = [
       // Return true|false
     },
   },
+  // ...
 ];
 ```
 
