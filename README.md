@@ -37,6 +37,7 @@ snmp-scout --rules path/to/rules/file
 Available options:
 
 - `-r, --rules <path-to-rules-file>`: Specify a path to the discovery rules file - default: ./snmp-scout-rules.js -- see format below
+- `-j, --json`: Output to STDOUT in JSON format instead of a table
 - `-h, --help`: Show help message and exit
 
 ### As a module
