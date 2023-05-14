@@ -25,30 +25,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.discoverHosts = void 0;
 // snmp-scout.ts
+const stream_1 = require("stream");
 const netSnmp = __importStar(require("net-snmp"));
-/**
- * Converts an IP address string to an integer.
- *
- * @param ip - The IP address string.
- * @returns The integer representation of the IP address.
- */
-function ipToInt(ip) {
-    const bytes = ip.split('.').map((byte) => parseInt(byte, 10));
-    return ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
-}
-/**
- * Converts an integer to an IP address string.
- *
- * @param integer - The integer representation of the IP address.
- * @returns The IP address string.
- */
-function intToIp(integer) {
-    const byte1 = (integer >> 24) & 0xff;
-    const byte2 = (integer >> 16) & 0xff;
-    const byte3 = (integer >> 8) & 0xff;
-    const byte4 = integer & 0xff;
-    return `${byte1}.${byte2}.${byte3}.${byte4}`;
-}
+const utils_1 = require("./utils");
 /**
  * Fetches SNMP varbinds for a specific IP address and community.
  *
@@ -76,59 +55,74 @@ async function getSNMPVarbinds(ip, oids, community, options) {
     return validVarbinds;
 }
 /**
- * Processes a discovery rule and attempts to discover hosts within the specified subnet.
+ * Processes a single rule, iterating through its subnet and communities, and attempting to discover hosts.
+ * Discovered hosts are pushed to the output stream if they match the rule's matchFunction.
  *
- * @param rule - The discovery rule to process.
- * @returns An array of discovered hosts.
+ * @param rule - The rule to process.
+ * @param output - The Readable stream to push discovered hosts to.
+ * @param queue - The PromiseQueue to manage concurrency of SNMP requests.
  */
-async function processRule(rule) {
-    const [subnet, mask] = rule.subnet.split('/');
-    const subnetInt = ipToInt(subnet);
-    const maskInt = ~(2 ** (32 - parseInt(mask)) - 1);
-    const firstHostInt = (subnetInt & maskInt) + 1;
-    const lastHostInt = (subnetInt | ~maskInt) - 1;
-    const fetchVarbindsPromises = [];
-    for (let currentHostInt = firstHostInt; currentHostInt <= lastHostInt; currentHostInt++) {
-        const currentHostIp = intToIp(currentHostInt);
-        for (const community of rule.communities) {
-            fetchVarbindsPromises.push(getSNMPVarbinds(currentHostIp, rule.oids, community, rule.options).then((varbinds) => {
-                if (rule.matchFunction(currentHostIp, varbinds)) {
-                    return {
-                        ip: currentHostIp,
-                        community,
-                        varbinds,
-                        rule,
-                    };
+async function processRule(rule, output, queue) {
+    const { subnet, communities, oids, options, matchFunction } = rule;
+    const [subnetAddress, cidr] = subnet.split('/');
+    const subnetInt = (0, utils_1.ipToInt)(subnetAddress);
+    const cidrInt = parseInt(cidr, 10);
+    const mask = ~((1 << (32 - cidrInt)) - 1) >>> 0;
+    const firstIpInt = (subnetInt & mask) + 1;
+    const lastIpInt = (subnetInt | ~mask) - 1;
+    for (let ipInt = firstIpInt; ipInt <= lastIpInt; ipInt++) {
+        const ipAddress = (0, utils_1.intToIp)(ipInt);
+        for (const community of communities) {
+            queue.add(async () => {
+                try {
+                    const varbinds = await getSNMPVarbinds(ipAddress, oids, community, options);
+                    if (matchFunction(ipAddress, varbinds)) {
+                        const host = {
+                            ip: ipAddress,
+                            community,
+                            varbinds,
+                            rule
+                        };
+                        output.push(host);
+                    }
                 }
-                else {
-                    return null;
+                catch (error) {
+                    // Ignore errors
                 }
-            })
-                .catch(() => {
-                return null;
-            }));
+            });
         }
     }
-    const validDiscoveredHosts = (await Promise.all(fetchVarbindsPromises)).filter((host) => host !== null);
-    return validDiscoveredHosts;
 }
 /**
- * Discovers SNMP hosts in a subnet according to the provided set of rules.
+ * Discovers hosts on a network using SNMP and a set of rules.
+ * The function returns a Readable stream of discovered hosts.
  *
- * @param rules - An array of discovery rules.
- * @returns An array of discovered hosts.
+ * @param rules - An array of rules to process for host discovery.
+ * @param concurrency - The maximum number of concurrent SNMP requests allowed.
+ * @returns A Readable stream of discovered hosts.
  */
-async function discoverHosts(rules = []) {
-    const allDiscoveredHosts = [];
-    for (const rule of rules) {
-        try {
-            const hosts = await processRule(rule);
-            allDiscoveredHosts.push(...hosts);
-        }
-        catch (err) {
-            console.error("Error processing rule:", err);
-        }
+function discoverHosts(rules, concurrency = 50, streamOutput = false) {
+    const output = new stream_1.Readable({ objectMode: true, read() { } });
+    const queue = new utils_1.AsyncConcurrentTaskQueue(concurrency);
+    rules.forEach((rule) => processRule(rule, output, queue));
+    queue.onFinished(() => {
+        // After all rules have been processed, close the output stream.
+        output.push(null);
+    });
+    // if the caller requested the stream then return it
+    if (streamOutput) {
+        return output;
     }
-    return allDiscoveredHosts;
+    else { // otherwise return a Promise that resolves with the discovered hosts when the stream is finished
+        return new Promise((resolve) => {
+            var discoveredHosts = [];
+            output.on('data', (host) => {
+                discoveredHosts.push(host);
+            });
+            output.on('end', () => {
+                resolve(discoveredHosts);
+            });
+        });
+    }
 }
 exports.discoverHosts = discoverHosts;

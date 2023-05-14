@@ -5,6 +5,7 @@ SNMP-Scout is a Node.js-based host discovery tool that uses SNMP to find hosts o
 ## Features
 
 - Discover hosts using SNMP
+- Streamed host discoveries
 - Customizable discovery rules
 - Support for multiple community strings
 - Support for matching multiple OIDs
@@ -37,6 +38,8 @@ snmp-scout --rules path/to/rules/file
 Available options:
 
 - `-r, --rules <path-to-rules-file>`: Specify a path to the discovery rules file - default: ./snmp-scout-rules.js -- see format below
+- `-c, --concurrency <number>`: The maximum number of SNMP/UDP connections to make concurrently, default: 50
+- `-s, --stream`: Output hosts as they are discovered
 - `-j, --json`: Output to STDOUT in JSON format instead of a table
 - `-h, --help`: Show help message and exit
 
@@ -51,9 +54,33 @@ const rules = [
   // Define your discovery rules here - see format below
 ];
 
+// default concurrency
 discoverHosts(rules).then(discoveredHosts => {
   // Process the discovered hosts
 });
+
+// specify concurrency
+discoverHosts(rules, 100).then(discoveredHosts => {
+  // Process the discovered hosts
+});
+```
+
+discoverHosts() can also return a Readable stream:
+
+```javascript
+var stream = discoverHosts(rules, options.concurrency, true);
+
+stream.pipe(transformHost)
+    .pipe(process.stdout)
+    .on('error', (err) => {
+      // ...
+    });
+
+// - or -
+
+stream.on('data', (host) => { //... });
+
+stream.on('end', () => { //... })
 ```
 
 ##### Host objects in discoveredHosts
