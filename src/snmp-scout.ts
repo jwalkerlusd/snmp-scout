@@ -3,7 +3,6 @@ import { Readable } from 'stream';
 import * as netSnmp from 'net-snmp';
 import { AsyncConcurrentTaskQueue, ipToInt, intToIp } from './utils';
 import { Rule, Varbind, Host } from './interfaces';
-import { resolve } from 'path';
 
 /**
  * Fetches SNMP varbinds for a specific IP address and community.

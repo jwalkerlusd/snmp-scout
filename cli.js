@@ -1,6 +1,7 @@
 // cli.js
 const fs = require('fs');
 const path = require('path');
+const { Transform } = require('stream');
 const { discoverHosts } = require('./dist/snmp-scout');
 
 function parseArgs() {
@@ -21,7 +22,7 @@ function parseArgs() {
                 throw new Error("--concurrency|-c specified without a value");
             concurrency = args[++i];
         } else if (args[i] === "--stream" || args[i] === "-s") {
-            streamOutput = args[++i];
+            streamOutput = true;
         } else if (args[i] === "--json" || args[i] === "-j") {
             outputJson = true;
         } else if (args[i] === "--help" || args[i] === "-h") {
