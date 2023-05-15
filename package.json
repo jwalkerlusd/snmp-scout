@@ -1,6 +1,6 @@
 {
   "name": "snmp-scout",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "SNMP-based host discovery tool",
   "main": "dist/snmp-scout.js",
   "bin": {
