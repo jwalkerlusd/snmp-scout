@@ -1,104 +1,8 @@
 // snmp-scout.ts
+import { Readable } from 'stream';
 import * as netSnmp from 'net-snmp';
-
-/**
- * Represents an SNMP varbind.
- */
-interface Varbind {
-    oid: string;
-    type: number;
-    value: any;
-}
-
-/**
- * Represents a discovered host with its IP, and the community string, varbinds, and associated rule that was used to discover it.
- */
-interface Host {
-    /**
-     * The IP address of the host.
-     */
-    ip: string;
-  
-    /**
-     * The SNMP community string used to discover the host.
-     */
-    community: string;
-  
-    /**
-     * The varbinds returned from the SNMP request to discover the host.
-     */
-    varbinds: Varbind[];
-  
-    /**
-     * An array of references to the rules that the host was discovered with.
-     */
-    rule: Rule;
-  }
-  
-
-/**
- * Represents a rule used to discover hosts in a subnet.
- */
-interface Rule {
-    /**
-     * A user-friendly name for the rule.
-     */
-    name: string;
-
-    /**
-     * The subnet to scan for hosts, in CIDR notation (e.g., '192.168.1.0/24').
-     */
-    subnet: string;
-
-    /**
-     * Array of SNMP community strings to try for each host.
-     */
-    communities: string[];
-
-    /**
-     * Array of OIDs to fetch using SNMP.
-     */
-    oids: string[];
-
-    /**
-     * Options for the net-snmp session.
-     */
-    options?: object;
-
-    /**
-     * A function that determines if a host matches the rule based on the IP and varbinds.
-     * @param ip - The IP address of the host.
-     * @param varbinds - The varbinds returned from the SNMP request.
-     * @returns - A boolean indicating if the host matches the rule.
-     */
-    matchFunction(ip: string, varbinds: Varbind[]): boolean;
-}
-
-/**
- * Converts an IP address string to an integer.
- *
- * @param ip - The IP address string.
- * @returns The integer representation of the IP address.
- */
-function ipToInt(ip: string): number {
-    const bytes = ip.split('.').map((byte) => parseInt(byte, 10));
-    return ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
-}
-
-/**
- * Converts an integer to an IP address string.
- *
- * @param integer - The integer representation of the IP address.
- * @returns The IP address string.
- */
-function intToIp(integer: number): string {
-    const byte1 = (integer >> 24) & 0xff;
-    const byte2 = (integer >> 16) & 0xff;
-    const byte3 = (integer >> 8) & 0xff;
-    const byte4 = integer & 0xff;
-
-    return `${byte1}.${byte2}.${byte3}.${byte4}`;
-}
+import { AsyncConcurrentTaskQueue, ipToInt, intToIp } from './utils';
+import { Rule, Varbind, Host } from './interfaces';
 
 /**
  * Fetches SNMP varbinds for a specific IP address and community.
@@ -110,91 +14,106 @@ function intToIp(integer: number): string {
  * @returns An array of SNMP varbinds.
  */
 async function getSNMPVarbinds(
-    ip: string,
-    oids: string[],
-    community: string,
-    options: object
+  ip: string,
+  oids: string[],
+  community: string,
+  options: object
 ): Promise<Varbind[]> {
-    const session = netSnmp.createSession(ip, community, options);
-    const varbinds = await new Promise<Varbind[]>((resolve, reject) => {
-        session.get(oids, (error, varbinds) => {
-            if (error) {
-                reject(error);
-            } else {
-                resolve(varbinds);
-            }
-            session.close();
-        });
+  const session = netSnmp.createSession(ip, community, options);
+  const varbinds = await new Promise<Varbind[]>((resolve, reject) => {
+    session.get(oids, (error, varbinds) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(varbinds);
+      }
+      session.close();
     });
+  });
 
-    // Filter out varbinds with errors
-    const validVarbinds = varbinds.filter((varbind) => !netSnmp.isVarbindError(varbind));
-    return validVarbinds;
+  // Filter out varbinds with errors
+  const validVarbinds = varbinds.filter((varbind) => !netSnmp.isVarbindError(varbind));
+  return validVarbinds;
 }
 
 /**
- * Processes a discovery rule and attempts to discover hosts within the specified subnet.
+ * Processes a single rule, iterating through its subnet and communities, and attempting to discover hosts.
+ * Discovered hosts are pushed to the output stream if they match the rule's matchFunction.
  *
- * @param rule - The discovery rule to process.
- * @returns An array of discovered hosts.
+ * @param rule - The rule to process.
+ * @param output - The Readable stream to push discovered hosts to.
+ * @param queue - The PromiseQueue to manage concurrency of SNMP requests.
  */
-async function processRule(rule: Rule): Promise<Host[]> {
-    const [subnet, mask] = rule.subnet.split('/');
-    const subnetInt = ipToInt(subnet);
-    const maskInt = ~(2 ** (32 - parseInt(mask)) - 1);
-    const firstHostInt = (subnetInt & maskInt) + 1;
-    const lastHostInt = (subnetInt | ~maskInt) - 1;
+async function processRule(rule: Rule, output: Readable, queue: AsyncConcurrentTaskQueue): Promise<void> {
+  const { subnet, communities, oids, options, matchFunction } = rule;
 
-    const fetchVarbindsPromises: Promise<Host | null>[] = [];
+  const [subnetAddress, cidr] = subnet.split('/');
+  const subnetInt = ipToInt(subnetAddress);
+  const cidrInt = parseInt(cidr, 10);
+  const mask = ~((1 << (32 - cidrInt)) - 1) >>> 0;
 
-    for (let currentHostInt = firstHostInt; currentHostInt <= lastHostInt; currentHostInt++) {
-        const currentHostIp = intToIp(currentHostInt);
+  const firstIpInt = (subnetInt & mask) + 1;
+  const lastIpInt = (subnetInt | ~mask) - 1;
 
-        for (const community of rule.communities) {
-            fetchVarbindsPromises.push(
-                getSNMPVarbinds(currentHostIp, rule.oids, community, rule.options).then((varbinds) => {
-                    if (rule.matchFunction(currentHostIp, varbinds)) {
-                        return {
-                            ip: currentHostIp,
-                            community,
-                            varbinds,
-                            rule,
-                        };
-                    } else {
-                        return null;
-                    }
-                })
-                .catch(() => {
-                    return null;
-                })
-            );
-        }
-    }
+  for (let ipInt = firstIpInt; ipInt <= lastIpInt; ipInt++) {
+    const ipAddress = intToIp(ipInt);
 
-    const validDiscoveredHosts: Host[] = (await Promise.all(fetchVarbindsPromises)).filter((host): host is Host => host !== null);
-
-    return validDiscoveredHosts;
-}
-
-/**
- * Discovers SNMP hosts in a subnet according to the provided set of rules.
- *
- * @param rules - An array of discovery rules.
- * @returns An array of discovered hosts.
- */
-async function discoverHosts(rules: Rule[] = []): Promise<Host[]> {
-    const allDiscoveredHosts: Host[] = [];
-
-    for (const rule of rules) {
+    for (const community of communities) {
+      queue.add(async () => {
         try {
-            const hosts = await processRule(rule);
-            allDiscoveredHosts.push(...hosts);
-        } catch (err) {
-            console.error("Error processing rule:", err);
-        }
-    }
+          const varbinds = await getSNMPVarbinds(ipAddress, oids, community, options);
 
-    return allDiscoveredHosts;
+          if (matchFunction(ipAddress, varbinds)) {
+            const host: Host = {
+              ip: ipAddress,
+              community,
+              varbinds,
+              rule
+            };
+            output.push(host);
+          }
+        } catch (error) {
+          // Ignore errors
+        }
+      });
+    }
+  }
+}
+
+/**
+ * Discovers hosts on a network using SNMP and a set of rules.
+ * The function returns a Readable stream of discovered hosts.
+ *
+ * @param rules - An array of rules to process for host discovery.
+ * @param concurrency - The maximum number of concurrent SNMP requests allowed.
+ * @returns A Readable stream of discovered hosts.
+ */
+function discoverHosts(rules: Rule[], concurrency: number = 50, streamOutput: boolean = false): Readable | Promise<Host[]> {
+  const output = new Readable({ objectMode: true, read() { } });
+  const queue = new AsyncConcurrentTaskQueue(concurrency);
+
+  rules.forEach((rule) => processRule(rule, output, queue));
+
+  queue.onFinished(() => {
+    // After all rules have been processed, close the output stream.
+    output.push(null);
+  });
+
+  // if the caller requested the stream then return it
+  if (streamOutput) {
+    return output;
+  } else { // otherwise return a Promise that resolves with the discovered hosts when the stream is finished
+    return new Promise<Host[]>((resolve) => {
+      var discoveredHosts: Host[] = [];
+      output.on('data', (host: Host) => {
+        discoveredHosts.push(host);
+      });
+
+      output.on('end', () => {
+        resolve(discoveredHosts);
+      });
+    });
+  }
 }
 
 export { discoverHosts };

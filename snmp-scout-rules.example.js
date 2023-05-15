@@ -3,7 +3,7 @@ const snmp = require("net-snmp"); // require net-snmp for constants
 module.exports = [
     {
         name: "Cisco Switches",
-        subnet: '10.0.0.0/8',
+        subnet: '192.168.0.0/24',
         communities: ['public', 'private'], // Add more community strings if needed
         options: {
             timeout: 1000,
