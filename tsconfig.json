@@ -1,14 +1,16 @@
 {
-    "compilerOptions": {
-      "module": "CommonJS",
-      "target": "ES2018",
-      "outDir": "dist",
-      "rootDir": "src",
-      "strict": false,
-      "esModuleInterop": true,
-      "forceConsistentCasingInFileNames": true
-    },
-    "include": ["src/**/*.ts"],
-    "exclude": ["node_modules", "**/*.test.ts"]
-  }
-  
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "ES2018",
+    "outDir": "dist",
+    "strict": true,
+    "declaration": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts"
+  ]
+}

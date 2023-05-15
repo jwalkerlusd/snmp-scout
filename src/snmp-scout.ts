@@ -1,5 +1,5 @@
 // snmp-scout.ts
-import { Readable } from 'stream';
+import { Readable } from 'node:stream';
 import * as netSnmp from 'net-snmp';
 import { AsyncConcurrentTaskQueue, ipToInt, intToIp } from './utils';
 import { Rule, Varbind, Host } from './interfaces';
@@ -17,7 +17,7 @@ async function getSNMPVarbinds(
   ip: string,
   oids: string[],
   community: string,
-  options: object
+  options?: object
 ): Promise<Varbind[]> {
   const session = netSnmp.createSession(ip, community, options);
   const varbinds = await new Promise<Varbind[]>((resolve, reject) => {
