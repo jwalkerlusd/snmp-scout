@@ -25,6 +25,21 @@ Or install as a Node module using npm:
 npm install --save snmp-scout
 ```
 
+The example rules module (snmp-scout-rules.example.js) requires the net-snmp module for constants.
+The net-snmp module must be installed in the working directory for the module to be loaded.
+This is also needed for other modules that are imported/required by the rules module.
+
+```javascript
+// snmp-scout-rules.js
+const snmp = require('net-snmp')
+```
+
+This will create/update the package.json file and node_modules folder in the current working directory.
+
+```sh
+npm install net-snmp
+```
+
 ## Usage
 
 ### CLI
