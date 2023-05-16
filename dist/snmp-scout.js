@@ -1,32 +1,9 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.discoverHosts = void 0;
 // snmp-scout.ts
-const stream_1 = require("stream");
-const netSnmp = __importStar(require("net-snmp"));
+const node_stream_1 = require("node:stream");
+const netSnmp = require("net-snmp");
 const utils_1 = require("./utils");
 /**
  * Fetches SNMP varbinds for a specific IP address and community.
@@ -102,7 +79,7 @@ async function processRule(rule, output, queue) {
  * @returns A Readable stream of discovered hosts.
  */
 function discoverHosts(rules, concurrency = 50, streamOutput = false) {
-    const output = new stream_1.Readable({ objectMode: true, read() { } });
+    const output = new node_stream_1.Readable({ objectMode: true, read() { } });
     const queue = new utils_1.AsyncConcurrentTaskQueue(concurrency);
     rules.forEach((rule) => processRule(rule, output, queue));
     queue.onFinished(() => {

@@ -33,8 +33,8 @@ export class AsyncConcurrentTaskQueue {
     private active: number;
     private errors: Array<Error>;
     private internalPromise: Promise<void>;
-    private resolveInternalPromise: () => void;
-    private rejectInternalPromise: (errors: Array<Error>) => void;
+    private resolveInternalPromise: (value?: void | PromiseLike<void>) => void = () => {};
+    private rejectInternalPromise: (reason?: any) => void = () => {};
 
     constructor(concurrency: number) {
         this.concurrency = concurrency;
@@ -53,7 +53,7 @@ export class AsyncConcurrentTaskQueue {
         try {
             await task();
         } catch (error) {
-            this.errors.push(error);
+            this.errors.push(error instanceof Error ? error: new Error(String(error)));
         }
         this.active--;
         this.next();

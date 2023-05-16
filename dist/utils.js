@@ -31,6 +31,8 @@ exports.intToIp = intToIp;
  */
 class AsyncConcurrentTaskQueue {
     constructor(concurrency) {
+        this.resolveInternalPromise = () => { };
+        this.rejectInternalPromise = () => { };
         this.concurrency = concurrency;
         this.tasks = [];
         this.active = 0;
@@ -46,7 +48,7 @@ class AsyncConcurrentTaskQueue {
             await task();
         }
         catch (error) {
-            this.errors.push(error);
+            this.errors.push(error instanceof Error ? error : new Error(String(error)));
         }
         this.active--;
         this.next();
