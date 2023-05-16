@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 // cli.js
 const fs = require('fs');
 const path = require('path');
